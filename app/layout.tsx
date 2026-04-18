@@ -3,7 +3,6 @@ import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import LenisProvider from "./components/LenisProvider";
 import Nav from "./components/Nav";
-import PasswordGate from "./components/PasswordGate";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -26,12 +25,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${dmSans.variable} h-full antialiased`}>
       <body className="min-h-full bg-[#080808] text-white">
-        <PasswordGate>
-          <LenisProvider>
-            <Nav />
-            {children}
-          </LenisProvider>
-        </PasswordGate>
+        <LenisProvider>
+          <Nav />
+          {children}
+        </LenisProvider>
       </body>
     </html>
   );
