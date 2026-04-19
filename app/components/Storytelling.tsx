@@ -66,7 +66,24 @@ function StoryPanel({
       </span>
 
       <div
-        className="absolute top-1/2 left-8 max-w-md -translate-y-1/2 md:left-16"
+        className="absolute top-1/2 left-8 max-w-md -translate-y-1/2 text-left md:left-16"
+        style={{ pointerEvents: "auto" }}
+      >
+        <h2
+          style={{
+            fontWeight: 700,
+            fontSize: "clamp(2rem, 5vw, 64px)",
+            letterSpacing: "-0.035em",
+            lineHeight: 1.11,
+            color: "#ffffff",
+          }}
+        >
+          {panel.large}
+        </h2>
+      </div>
+
+      <div
+        className="absolute top-1/2 right-8 max-w-md -translate-y-1/2 md:right-16"
         style={{ pointerEvents: "auto" }}
       >
         <span
@@ -93,23 +110,6 @@ function StoryPanel({
         >
           {panel.headline} {panel.body}
         </p>
-      </div>
-
-      <div
-        className="absolute top-1/2 right-8 max-w-md -translate-y-1/2 text-left md:right-16"
-        style={{ pointerEvents: "auto" }}
-      >
-        <h2
-          style={{
-            fontWeight: 700,
-            fontSize: "clamp(2rem, 5vw, 64px)",
-            letterSpacing: "-0.035em",
-            lineHeight: 1.11,
-            color: "#ffffff",
-          }}
-        >
-          {panel.large}
-        </h2>
       </div>
     </motion.div>
   );

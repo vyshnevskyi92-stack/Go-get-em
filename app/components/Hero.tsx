@@ -43,8 +43,8 @@ export default function Hero() {
             lineHeight: 1.4,
           }}
         >
-          AI analysis that benchmarks your page against high-performing SaaS
-          and shows exactly what to fix — and why.
+          AI analysis that benchmarks your landing page against the best in
+          SaaS — and shows exactly what to fix and why
         </p>
 
         <button
