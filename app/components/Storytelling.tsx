@@ -5,6 +5,7 @@ import { motion, useScroll, useTransform, MotionValue } from "framer-motion";
 
 type Panel = {
   label: string;
+  tag: string;
   headline: string;
   body: string;
   large: string;
@@ -13,21 +14,24 @@ type Panel = {
 const panels: Panel[] = [
   {
     label: "01",
+    tag: "Problem",
     headline: "Most teams struggle to understand why competitors outperform them.",
     body: "The best ones know.",
     large: "See where you fall behind.",
   },
   {
     label: "02",
-    headline: "'Improve your CTA' is not advice.",
-    body: "We tell you what your top competitor says instead, and why theirs converts better.",
-    large: "Changes you can ship today.",
+    tag: "Solution",
+    headline: "We identify your competitors, analyze their pages,",
+    body: "and benchmark everything automatically",
+    large: "Benchmarked against best.",
   },
   {
     label: "03",
-    headline: "No manual research.",
-    body: "Competitors identified. Pages analyzed.\nBenchmarking — automatic.",
-    large: "Instantly benchmarked against best.",
+    tag: "Result",
+    headline: "'Improve your CTA' is not advice.",
+    body: "We tell you what your top competitor says instead, and why theirs converts better.",
+    large: "Changes you can ship today.",
   },
 ];
 
@@ -65,28 +69,29 @@ function StoryPanel({
         className="absolute top-1/2 left-8 max-w-md -translate-y-1/2 md:left-16"
         style={{ pointerEvents: "auto" }}
       >
-        <p
+        <span
+          className="inline-block rounded-full border border-white/40"
           style={{
-            fontWeight: 600,
-            fontSize: "clamp(1.25rem, 2.1vw, 1.5rem)",
-            color: "rgba(255,255,255,0.96)",
-            lineHeight: 1.35,
-            letterSpacing: "-0.02em",
+            padding: "5px 14px",
+            fontSize: 12,
+            fontWeight: 400,
+            color: "#ffffff",
+            letterSpacing: "0.02em",
           }}
         >
-          {panel.headline}
-        </p>
+          {panel.tag}
+        </span>
         <p
           className="mt-5"
           style={{
-            fontWeight: 400,
-            fontSize: 17,
-            color: "rgba(255,255,255,0.78)",
-            lineHeight: 1.62,
+            fontWeight: 300,
+            fontSize: 24,
+            color: "rgba(255,255,255,0.9)",
+            lineHeight: 1.4,
             whiteSpace: "pre-line",
           }}
         >
-          {panel.body}
+          {panel.headline} {panel.body}
         </p>
       </div>
 

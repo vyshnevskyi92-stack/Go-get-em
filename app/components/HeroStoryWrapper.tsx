@@ -42,7 +42,7 @@ export default function HeroStoryWrapper({
   const baseScale = useTransform(
     scrollYProgress,
     [0, 0.10, 0.20, 0.95, 1],
-    [1, 1, 0.4, 0.4, 1],
+    [1, 1, 0.5, 0.5, 1],
   );
 
   // Shrinks the blob when competitors render, so the pills under it breathe.
