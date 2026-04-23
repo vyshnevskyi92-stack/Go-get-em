@@ -39,6 +39,7 @@ export default function InputSection({
     null,
   );
   const [phaseIdx, setPhaseIdx] = useState(0);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const lastIdentifiedUrlRef = useRef<string | null>(null);
   const requestIdRef = useRef(0);
 
@@ -90,6 +91,7 @@ export default function InputSection({
     if (phase !== "identified" || !foundCompetitors || !targetUrl) return;
     const myId = ++requestIdRef.current;
     setPhase("analyzing");
+    setAnalyzeError(null);
     try {
       const [res] = await Promise.all([
         fetch(`/api/analyze${MOCK_QUERY}`, {
@@ -100,14 +102,48 @@ export default function InputSection({
         new Promise((r) => setTimeout(r, 7200)),
       ]);
       if (myId !== requestIdRef.current) return;
-      if (!res.ok) throw new Error(`analyze failed: ${res.status}`);
-      const data = (await res.json()) as AnalysisData;
+
+      console.log("analyze status:", res.status);
+      const raw = await res.text();
+      let data: unknown = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        /* non-JSON response (likely HTML error page or timeout) */
+      }
+      console.log("analyze data:", data);
+
       if (myId !== requestIdRef.current) return;
-      onAnalyzeComplete?.({ ...data, url: targetUrl });
+
+      if (!res.ok) {
+        const detail =
+          (data as { detail?: string; error?: string } | null)?.detail ??
+          (data as { detail?: string; error?: string } | null)?.error ??
+          raw.slice(0, 200) ??
+          `HTTP ${res.status}`;
+        setAnalyzeError(`Analysis failed (${res.status}): ${detail}`);
+        setPhase("identified");
+        return;
+      }
+
+      const analysis = data as AnalysisData | null;
+      if (
+        !analysis ||
+        !analysis.recommendations ||
+        analysis.recommendations.length === 0
+      ) {
+        setAnalyzeError("Analysis returned no insights. Try again.");
+        setPhase("identified");
+        return;
+      }
+
+      onAnalyzeComplete?.({ ...analysis, url: targetUrl });
       setPhase("idle");
     } catch (err) {
       if (myId !== requestIdRef.current) return;
+      const message = err instanceof Error ? err.message : String(err);
       console.error("Analyze failed:", err);
+      setAnalyzeError(`Analysis failed: ${message}`);
       setPhase("identified");
     }
   }
@@ -134,6 +170,7 @@ export default function InputSection({
     setPhase("idle");
     setUrl("");
     setFoundCompetitors(null);
+    setAnalyzeError(null);
     lastIdentifiedUrlRef.current = null;
   };
 
@@ -142,6 +179,7 @@ export default function InputSection({
     if (!trimmed) return;
     requestIdRef.current++;
     lastIdentifiedUrlRef.current = null;
+    setAnalyzeError(null);
     void runIdentify(trimmed);
   };
 
@@ -351,6 +389,22 @@ export default function InputSection({
               </span>
             </div>
           </div>
+
+          {analyzeError && (
+            <div
+              className="max-w-full text-center"
+              role="alert"
+              style={{
+                fontSize: 13,
+                fontWeight: 400,
+                color: "rgb(248, 113, 113)",
+                lineHeight: 1.4,
+                wordBreak: "break-word",
+              }}
+            >
+              {analyzeError}
+            </div>
+          )}
         </form>
       </div>
     </section>
