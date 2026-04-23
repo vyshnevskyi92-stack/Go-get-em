@@ -16,22 +16,31 @@ const MOCK_ANALYSIS = {
   recommendations: [
     {
       dimension: "hero_clarity",
-      finding:
-        "Headline states the feature, not the outcome. Linear's hero leads with a measurable benefit and pairs it with a visual proof point above the fold.",
+      competitor: "Linear",
+      yourEvidence:
+        "Your headline states the feature, not the outcome — it reads as a product description rather than a benefit the user walks away with.",
+      competitorEvidence:
+        "Linear's hero leads with a measurable benefit and pairs it with a visual proof point above the fold.",
       action:
         "Rewrite the hero to lead with the user outcome in 6–8 words; move the feature description to the sub-headline.",
     },
     {
       dimension: "cta_strength",
-      finding:
-        "Single CTA is visible but lacks urgency framing. ClickUp repeats the CTA after each value section and uses first-person microcopy ('Start my workspace').",
+      competitor: "ClickUp",
+      yourEvidence:
+        "Single CTA is visible but lacks urgency framing or first-person microcopy.",
+      competitorEvidence:
+        "ClickUp repeats the CTA after each value section and uses first-person microcopy ('Start my workspace').",
       action:
         "Add a secondary CTA after the social-proof block and rewrite the primary CTA in first-person voice.",
     },
     {
       dimension: "social_proof",
-      finding:
-        "Logos are present but there are no customer quotes or outcome numbers. Asana anchors its hero with 2 quantified proof points ('4.5M+ teams', '45% faster').",
+      competitor: "Asana",
+      yourEvidence:
+        "Logos are present but there are no customer quotes or outcome numbers near the hero.",
+      competitorEvidence:
+        "Asana anchors its hero with 2 quantified proof points ('4.5M+ teams', '45% faster').",
       action:
         "Add 1–2 quantified proof points within the first viewport and a short customer quote near the primary CTA.",
     },
@@ -288,9 +297,11 @@ quoting the specific CTA text.
 "scores" describes the USER's page. For each dimension produce ONE insight
 comparing the user against whichever competitor contrasts most strongly on
 that dimension. Use the competitor screenshots to describe visual patterns
-(layout, hierarchy, imagery). Set "competitor_name" to the exact competitor
-you picked — it MUST be one of: ${competitorNames}. Return ONLY the JSON
-the schema demands.`;
+(layout, hierarchy, imagery). **Spread the comparisons across competitors —
+don't pick the same competitor for every insight.** Different competitors
+are usually strongest at different things, so vary your picks. Set
+"competitor_name" to the exact competitor you picked — it MUST be one of:
+${competitorNames}. Return ONLY the JSON the schema demands.`;
 
   const content: ContentBlock[] = [
     {
@@ -341,14 +352,29 @@ the schema demands.`;
       insights: Insight[];
     };
 
-    // Top 3 insights by score gap (biggest gap first).
-    const topInsights = [...parsed.insights]
-      .sort(
-        (a, b) =>
-          Math.abs(b.competitor_score - b.your_score) -
-          Math.abs(a.competitor_score - a.your_score),
-      )
-      .slice(0, 3);
+    // Top 3 insights by score gap, but prefer variety in competitor names so
+    // each card cites a different competitor (and shows a different screenshot).
+    const sortedByGap = [...parsed.insights].sort(
+      (a, b) =>
+        Math.abs(b.competitor_score - b.your_score) -
+        Math.abs(a.competitor_score - a.your_score),
+    );
+    const topInsights: Insight[] = [];
+    const usedCompetitors = new Set<string>();
+    // Pass 1: take the highest-gap insight per unique competitor.
+    for (const insight of sortedByGap) {
+      if (topInsights.length >= 3) break;
+      if (!usedCompetitors.has(insight.competitor_name)) {
+        topInsights.push(insight);
+        usedCompetitors.add(insight.competitor_name);
+      }
+    }
+    // Pass 2: if we have fewer than 3 unique competitors, fill the rest with
+    // the next highest-gap insights regardless of duplicate competitor.
+    for (const insight of sortedByGap) {
+      if (topInsights.length >= 3) break;
+      if (!topInsights.includes(insight)) topInsights.push(insight);
+    }
 
     // Screenshots keyed by label (user's page as "your_page", each
     // competitor by the exact name identify returned) so the frontend
@@ -362,7 +388,8 @@ the schema demands.`;
       scores: parsed.scores,
       recommendations: topInsights.map((i) => ({
         dimension: i.dimension,
-        finding: `Your page: ${i.your_evidence}\n${i.competitor_name}: ${i.competitor_evidence}`,
+        yourEvidence: i.your_evidence,
+        competitorEvidence: i.competitor_evidence,
         action: i.recommendation,
         competitor: i.competitor_name,
       })),

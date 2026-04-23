@@ -7,8 +7,12 @@ import EmailGateModal from "./EmailGateModal";
 type Card = {
   dimension: string;
   score: string;
-  analysis: string;
   competitor?: string;
+  // Structured fields (live analysis). Fall back to `analysis` when missing.
+  yourEvidence?: string;
+  competitorEvidence?: string;
+  action?: string;
+  analysis?: string;
 };
 
 function formatDimension(key: string): string {
@@ -24,7 +28,9 @@ function analysisToCards(data: AnalysisData): Card[] {
     return {
       dimension: formatDimension(r.dimension),
       score: typeof score === "number" ? `${score}/10` : "",
-      analysis: `${r.finding} ${r.action}`.trim(),
+      yourEvidence: r.yourEvidence,
+      competitorEvidence: r.competitorEvidence,
+      action: r.action,
       competitor: r.competitor,
     };
   });
@@ -156,18 +162,88 @@ function ResultCard({
           {card.score}
         </span>
       </div>
-      <p
-        className="mt-3 max-w-3xl"
-        style={{
-          fontWeight: 300,
-          fontSize: bodySize,
-          opacity: 0.7,
-          lineHeight: 1.55,
-          whiteSpace: "pre-line",
-        }}
-      >
-        {card.analysis}
-      </p>
+      {card.yourEvidence || card.competitorEvidence ? (
+        <div className="mt-5 flex max-w-3xl flex-col gap-4">
+          {card.yourEvidence && (
+            <div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "rgba(255,255,255,0.5)",
+                  marginBottom: 6,
+                }}
+              >
+                Your page
+              </div>
+              <p
+                style={{
+                  fontWeight: 300,
+                  fontSize: bodySize,
+                  color: "rgba(255,255,255,0.85)",
+                  lineHeight: 1.55,
+                }}
+              >
+                {card.yourEvidence}
+              </p>
+            </div>
+          )}
+          {card.competitorEvidence && (
+            <div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "rgba(255,255,255,0.5)",
+                  marginBottom: 6,
+                }}
+              >
+                {card.competitor ?? "Competitor"}
+              </div>
+              <p
+                style={{
+                  fontWeight: 300,
+                  fontSize: bodySize,
+                  color: "rgba(255,255,255,0.85)",
+                  lineHeight: 1.55,
+                }}
+              >
+                {card.competitorEvidence}
+              </p>
+            </div>
+          )}
+          {card.action && (
+            <p
+              style={{
+                fontWeight: 400,
+                fontSize: bodySize,
+                color: "rgba(255,255,255,0.9)",
+                lineHeight: 1.55,
+                paddingTop: 4,
+              }}
+            >
+              {card.action}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p
+          className="mt-3 max-w-3xl"
+          style={{
+            fontWeight: 300,
+            fontSize: bodySize,
+            opacity: 0.7,
+            lineHeight: 1.55,
+            whiteSpace: "pre-line",
+          }}
+        >
+          {card.analysis}
+        </p>
+      )}
     </div>
   );
 }

@@ -2,7 +2,11 @@ export type Competitor = { name: string; domain: string };
 
 export type Recommendation = {
   dimension: string;
-  finding: string;
+  /** Evidence about the user's page. */
+  yourEvidence: string;
+  /** Evidence about the competitor's page. */
+  competitorEvidence: string;
+  /** What the user should do. */
   action: string;
   /** Name of the competitor this insight compared against. */
   competitor?: string;
