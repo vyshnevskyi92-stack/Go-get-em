@@ -218,7 +218,9 @@ export default function InputSection({
           <div className="input-blob-border-ring flex min-h-[52px] w-full min-w-0 items-stretch overflow-hidden rounded-full">
             <div className="flex min-h-[52px] min-w-0 flex-1 items-center gap-2 rounded-full bg-[#141414] py-2 pl-5 pr-2">
               <input
-                type="url"
+                type="text"
+                inputMode="url"
+                autoComplete="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="Drop your URL here"

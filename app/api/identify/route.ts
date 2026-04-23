@@ -43,14 +43,16 @@ export async function POST(request: Request) {
   const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+
   const start = Date.now();
-  console.log(`[identify] start url=${url}`);
+  console.log(`[identify] start url=${normalizedUrl}`);
 
   try {
     // Single-page scrape only — never crawl the whole site. Markdown-only
     // here: identify doesn't need a screenshot, saves Firecrawl credits.
     console.log("[identify] firecrawl.scrape …");
-    const scraped = await firecrawl.scrape(url, {
+    const scraped = await firecrawl.scrape(normalizedUrl, {
       formats: ["markdown"],
       onlyMainContent: true,
     });
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
     // Keep token usage tight — first 3K chars is enough for positioning signals.
     const pageContent = (scraped.markdown ?? "").slice(0, 3000);
     if (!pageContent) {
-      console.error("[identify] no markdown returned for", url, scraped);
+      console.error("[identify] no markdown returned for", normalizedUrl, scraped);
       return Response.json(
         { error: "Firecrawl returned no markdown for this URL" },
         { status: 502 },

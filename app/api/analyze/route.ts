@@ -193,11 +193,14 @@ export async function POST(request: Request) {
   const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  const normalize = (u: string) =>
+    /^https?:\/\//i.test(u) ? u : `https://${u}`;
+
   const targets = [
-    { label: "your_page", url },
+    { label: "your_page", url: normalize(url) },
     ...competitors.slice(0, 3).map((c) => ({
       label: c.name,
-      url: c.domain.startsWith("http") ? c.domain : `https://${c.domain}`,
+      url: normalize(c.domain),
     })),
   ];
 
