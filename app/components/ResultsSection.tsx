@@ -66,17 +66,6 @@ const blurredCards: Card[] = [
   },
 ];
 
-// thum.io renders a live screenshot of any public URL — free, no key.
-function sitePreview(siteUrl: string, width: number): string {
-  return `https://image.thum.io/get/width/${width}/noanimate/${siteUrl}`;
-}
-
-function normalizeUrl(u: string): string {
-  const trimmed = u.trim();
-  if (!trimmed) return "";
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
 function PreviewTile({
   height,
   src,
@@ -113,16 +102,12 @@ function ResultCard({
   card,
   blurred = false,
   featured = false,
-  userUrl,
-  userScreenshot,
   competitorName,
   competitorScreenshot,
 }: {
   card: Card;
   blurred?: boolean;
   featured?: boolean;
-  userUrl?: string;
-  userScreenshot?: string;
   competitorName?: string;
   competitorScreenshot?: string;
 }) {
@@ -130,16 +115,8 @@ function ResultCard({
   const titleSize = featured ? 32 : 22;
   const scoreSize = featured ? 22 : 16;
   const bodySize = featured ? 17 : 14;
-  const previewHeight = featured ? 220 : 150;
-  const previewWidth = featured ? 800 : 600;
-  const normalizedUserUrl = userUrl ? normalizeUrl(userUrl) : "";
-  const leftSrc =
-    userScreenshot ??
-    (normalizedUserUrl
-      ? sitePreview(normalizedUserUrl, previewWidth)
-      : `https://placehold.co/${previewWidth}x${previewHeight * 2}/151515/555555/png?text=Your+page&font=roboto`);
-  const rightSrc = competitorScreenshot;
-  const hasPair = Boolean(rightSrc && competitorName);
+  const previewHeight = featured ? 320 : 220;
+  const hasCompetitor = Boolean(competitorScreenshot && competitorName);
 
   return (
     <div
@@ -150,33 +127,18 @@ function ResultCard({
           : undefined
       }
     >
-      <div className="flex gap-3">
-        {hasPair ? (
-          <>
-            <PreviewTile
-              height={previewHeight}
-              src={leftSrc}
-              caption="Your page"
-            />
-            <PreviewTile
-              height={previewHeight}
-              src={rightSrc as string}
-              caption={competitorName as string}
-            />
-          </>
-        ) : (
-          <>
-            <div
-              className="flex-1 rounded-md"
-              style={{ height: previewHeight, background: "#1a1a1a" }}
-            />
-            <div
-              className="flex-1 rounded-md"
-              style={{ height: previewHeight, background: "#1a1a1a" }}
-            />
-          </>
-        )}
-      </div>
+      {hasCompetitor ? (
+        <PreviewTile
+          height={previewHeight}
+          src={competitorScreenshot as string}
+          caption={competitorName as string}
+        />
+      ) : (
+        <div
+          className="rounded-md"
+          style={{ height: previewHeight, background: "#1a1a1a" }}
+        />
+      )}
       <div className="mt-6 flex items-baseline justify-between gap-4">
         <h4
           style={{
@@ -199,8 +161,9 @@ function ResultCard({
         style={{
           fontWeight: 300,
           fontSize: bodySize,
-          opacity: 0.65,
+          opacity: 0.7,
           lineHeight: 1.55,
+          whiteSpace: "pre-line",
         }}
       >
         {card.analysis}
@@ -280,8 +243,6 @@ export default function ResultsSection({
                 key={c.dimension}
                 card={c}
                 featured
-                userUrl={data?.url}
-                userScreenshot={data?.screenshots?.your_page}
                 competitorName={competitorName}
                 competitorScreenshot={competitorScreenshot}
               />

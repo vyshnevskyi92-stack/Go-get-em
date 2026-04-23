@@ -117,11 +117,14 @@ async function scrapePage(
   firecrawl: Firecrawl,
   label: string,
   url: string,
+  withScreenshot: boolean,
 ): Promise<ScrapedPage> {
   const doc = await firecrawl.scrape(url, {
-    formats: ["markdown", { type: "screenshot", fullPage: false }],
+    formats: withScreenshot
+      ? ["markdown", { type: "screenshot", fullPage: false }]
+      : ["markdown"],
     onlyMainContent: true,
-    waitFor: 2000,
+    waitFor: withScreenshot ? 2000 : 1000,
   });
   console.log(
     `[analyze] firecrawl ${label} (${url}) → markdown=${(doc.markdown ?? "").length} chars, screenshotUrl=${doc.screenshot ?? "<none>"}`,
@@ -147,8 +150,6 @@ async function scrapePage(
         `[analyze] failed to fetch ${label} screenshot: ${res.status}`,
       );
     }
-  } else {
-    console.warn(`[analyze] firecrawl returned no screenshot for ${label}`);
   }
   return {
     label,
@@ -196,18 +197,23 @@ export async function POST(request: Request) {
   const normalize = (u: string) =>
     /^https?:\/\//i.test(u) ? u : `https://${u}`;
 
+  // User page: markdown only (keeps analyze under Vercel's 60s ceiling).
+  // Competitor pages: screenshot + markdown (visual patterns Claude cites).
   const targets = [
-    { label: "your_page", url: normalize(url) },
+    { label: "your_page", url: normalize(url), withScreenshot: false },
     ...competitors.slice(0, 3).map((c) => ({
       label: c.name,
       url: normalize(c.domain),
+      withScreenshot: true,
     })),
   ];
 
   let pages: ScrapedPage[];
   try {
     pages = await Promise.all(
-      targets.map((t) => scrapePage(firecrawl, t.label, t.url)),
+      targets.map((t) =>
+        scrapePage(firecrawl, t.label, t.url, t.withScreenshot),
+      ),
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -220,12 +226,6 @@ export async function POST(request: Request) {
 
   const userPage = pages[0];
   const competitorPages = pages.slice(1);
-  if (!userPage.screenshotBase64) {
-    return Response.json(
-      { error: "Could not capture a screenshot of the user page" },
-      { status: 502 },
-    );
-  }
 
   type ContentBlock =
     | { type: "text"; text: string }
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
 
   const competitorNames = competitorPages.map((p) => p.label).join(", ");
   const systemPrompt = `You are a senior conversion designer analyzing a SaaS landing page.
-Score these 6 dimensions 1-10 and provide specific evidence from what you see:
+Score these 6 dimensions 1-10 and provide specific evidence:
 - hero_clarity: headline clarity and outcome focus
 - cta_strength: CTA specificity and urgency
 - social_proof: trust signals quantity and quality
@@ -248,26 +248,22 @@ Score these 6 dimensions 1-10 and provide specific evidence from what you see:
 - pricing_transparency: pricing clarity
 - mobile_readiness: mobile optimization signals
 
-For EVERY score cite the SPECIFIC copy or visual element you see.
-Never say "improve your CTA" without quoting the actual CTA text.
+You will receive the USER's page as markdown only (no screenshot). You will
+receive each COMPETITOR as markdown AND a screenshot. Cite the actual copy
+and visual elements you can see. Never say "improve your CTA" without
+quoting the specific CTA text.
 
 "scores" describes the USER's page. For each dimension produce ONE insight
 comparing the user against whichever competitor contrasts most strongly on
-that dimension. Set "competitor_name" to the exact competitor you picked —
-it MUST be one of: ${competitorNames}. Return ONLY the JSON the schema demands.`;
+that dimension. Use the competitor screenshots to describe visual patterns
+(layout, hierarchy, imagery). Set "competitor_name" to the exact competitor
+you picked — it MUST be one of: ${competitorNames}. Return ONLY the JSON
+the schema demands.`;
 
   const content: ContentBlock[] = [
     {
       type: "text",
-      text: `=== USER PAGE (${userPage.url}) ===\n${userPage.markdown}`,
-    },
-    {
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: userPage.screenshotMediaType ?? "image/png",
-        data: userPage.screenshotBase64,
-      },
+      text: `=== USER PAGE (${userPage.url}) — markdown only ===\n${userPage.markdown}`,
     },
   ];
 
@@ -334,7 +330,7 @@ it MUST be one of: ${competitorNames}. Return ONLY the JSON the schema demands.`
       scores: parsed.scores,
       recommendations: topInsights.map((i) => ({
         dimension: i.dimension,
-        finding: `${i.your_evidence} Top competitor: ${i.competitor_evidence}`,
+        finding: `Your page: ${i.your_evidence}\n${i.competitor_name}: ${i.competitor_evidence}`,
         action: i.recommendation,
         competitor: i.competitor_name,
       })),
