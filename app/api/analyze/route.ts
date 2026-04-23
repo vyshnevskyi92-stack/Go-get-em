@@ -208,24 +208,56 @@ export async function POST(request: Request) {
     })),
   ];
 
-  let pages: ScrapedPage[];
-  try {
-    pages = await Promise.all(
-      targets.map((t) =>
-        scrapePage(firecrawl, t.label, t.url, t.withScreenshot),
-      ),
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[analyze] scrape failed:", message);
+  // Tolerant parallelism: one failed scrape shouldn't tank the whole request.
+  const settled = await Promise.allSettled(
+    targets.map((t) =>
+      scrapePage(firecrawl, t.label, t.url, t.withScreenshot),
+    ),
+  );
+
+  const pages: ScrapedPage[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i];
+    if (r.status === "fulfilled") {
+      pages.push(r.value);
+    } else {
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      console.error(
+        `[analyze] scrape failed for ${targets[i].label} (${targets[i].url}):`,
+        msg,
+      );
+    }
+  }
+
+  const userPage = pages.find((p) => p.label === "your_page");
+  const competitorPages = pages.filter((p) => p.label !== "your_page");
+
+  if (!userPage) {
+    const userFailure = settled[0];
+    const detail =
+      userFailure.status === "rejected"
+        ? userFailure.reason instanceof Error
+          ? userFailure.reason.message
+          : String(userFailure.reason)
+        : "Unknown";
     return Response.json(
-      { error: "firecrawl scrape failed", detail: message },
+      {
+        error: "Could not scrape your page",
+        detail,
+      },
       { status: 502 },
     );
   }
 
-  const userPage = pages[0];
-  const competitorPages = pages.slice(1);
+  if (competitorPages.length === 0) {
+    return Response.json(
+      {
+        error: "Could not scrape any competitor",
+        detail: "All competitor pages failed to load. Try different competitors.",
+      },
+      { status: 502 },
+    );
+  }
 
   type ContentBlock =
     | { type: "text"; text: string }
