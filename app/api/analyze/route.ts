@@ -128,6 +128,7 @@ async function scrapePage(
   label: string,
   url: string,
   withScreenshot: boolean,
+  embedScreenshot: boolean,
 ): Promise<ScrapedPage> {
   const tStart = Date.now();
   const doc = await firecrawl.scrape(url, {
@@ -145,7 +146,7 @@ async function scrapePage(
 
   let screenshotBase64: string | undefined;
   let screenshotMediaType: ScrapedPage["screenshotMediaType"] = "image/png";
-  if (doc.screenshot) {
+  if (doc.screenshot && embedScreenshot) {
     const tDl = Date.now();
     const res = await fetch(doc.screenshot);
     if (res.ok) {
@@ -212,14 +213,23 @@ export async function POST(request: Request) {
   const normalize = (u: string) =>
     /^https?:\/\//i.test(u) ? u : `https://${u}`;
 
-  // User page: markdown only (keeps analyze under Vercel's 60s ceiling).
-  // Competitor pages: screenshot + markdown (visual patterns Claude cites).
+  // User page: markdown + screenshot embedded for Claude (the page being scored).
+  // Competitor pages: screenshot URL captured for UI thumbnails, but bytes are
+  // NOT embedded for Claude — vision-on-3-images was the 45s long pole.
+  // Competitor evidence comes from markdown; visual claims about competitors
+  // must be grounded in markdown structure or tagged confidence:"low".
   const targets = [
-    { label: "your_page", url: normalize(url), withScreenshot: false },
+    {
+      label: "your_page",
+      url: normalize(url),
+      withScreenshot: true,
+      embedScreenshot: true,
+    },
     ...competitors.slice(0, 3).map((c) => ({
       label: c.name,
       url: normalize(c.domain),
       withScreenshot: true,
+      embedScreenshot: false,
     })),
   ];
 
@@ -227,7 +237,7 @@ export async function POST(request: Request) {
   const tScrapeStart = Date.now();
   const settled = await Promise.allSettled(
     targets.map((t) =>
-      scrapePage(firecrawl, t.label, t.url, t.withScreenshot),
+      scrapePage(firecrawl, t.label, t.url, t.withScreenshot, t.embedScreenshot),
     ),
   );
   console.log(
@@ -299,42 +309,47 @@ Score these 6 dimensions 1-10 and provide specific evidence:
 - pricing_transparency: pricing clarity
 - mobile_readiness: mobile optimization signals
 
-You will receive the USER's page as markdown only (no screenshot). You will
-receive each COMPETITOR as markdown AND a screenshot. Cite the actual copy
-and visual elements you can see. Never say "improve your CTA" without
-quoting the specific CTA text.
+You will receive the USER's page as markdown AND a screenshot. You will
+receive each COMPETITOR as markdown ONLY (no screenshot). Cite the actual
+copy you can read, and — for the user's page — the visual elements you
+can see. Never say "improve your CTA" without quoting the specific CTA text.
 
 "scores" describes the USER's page. For each dimension produce ONE insight
 comparing the user against whichever competitor contrasts most strongly on
-that dimension. Use the competitor screenshots to describe visual patterns
-(layout, hierarchy, imagery). **Spread the comparisons across competitors —
-don't pick the same competitor for every insight.** Different competitors
-are usually strongest at different things, so vary your picks. Set
-"competitor_name" to the exact competitor you picked — it MUST be one of:
-${competitorNames}. Return ONLY the JSON the schema demands.`;
+that dimension. Use the user's screenshot to describe their page's visual
+hierarchy, imagery, and layout concretely. For COMPETITORS, ground claims
+in their markdown — quoted copy, heading structure, presence/absence of
+sections. Do NOT invent visual details about competitors you cannot see;
+if a comparison would require seeing a competitor's layout or imagery,
+either reframe it around copy/structure or set "confidence":"low".
+**Spread the comparisons across competitors — don't pick the same
+competitor for every insight.** Different competitors are usually strongest
+at different things, so vary your picks. Set "competitor_name" to the exact
+competitor you picked — it MUST be one of: ${competitorNames}. Return ONLY
+the JSON the schema demands.`;
 
   const content: ContentBlock[] = [
     {
       type: "text",
-      text: `=== USER PAGE (${userPage.url}) — markdown only ===\n${userPage.markdown}`,
+      text: `=== USER PAGE (${userPage.url}) — markdown + screenshot ===\n${userPage.markdown}`,
     },
   ];
+  if (userPage.screenshotBase64 && userPage.screenshotMediaType) {
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: userPage.screenshotMediaType,
+        data: userPage.screenshotBase64,
+      },
+    });
+  }
 
   for (const p of competitorPages) {
     content.push({
       type: "text",
-      text: `\n=== COMPETITOR: ${p.label} (${p.url}) ===\n${p.markdown}`,
+      text: `\n=== COMPETITOR: ${p.label} (${p.url}) — markdown only ===\n${p.markdown}`,
     });
-    if (p.screenshotBase64 && p.screenshotMediaType) {
-      content.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: p.screenshotMediaType,
-          data: p.screenshotBase64,
-        },
-      });
-    }
   }
 
   try {
