@@ -2,8 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import Firecrawl from "@mendable/firecrawl-js";
 import { shouldUseMock } from "../_lib/mock-guard";
 
-// Vision + 4 Firecrawl scrapes can take a while. Let the route run up to 60s.
-export const maxDuration = 60;
+// Vision + 4 Firecrawl scrapes can blow past 60s on heavy SaaS pages.
+// Use Vercel's 300s ceiling and rely on per-stage timing logs to find the long pole.
+export const maxDuration = 300;
 
 type Competitor = { name: string; domain: string };
 
@@ -128,6 +129,7 @@ async function scrapePage(
   url: string,
   withScreenshot: boolean,
 ): Promise<ScrapedPage> {
+  const tStart = Date.now();
   const doc = await firecrawl.scrape(url, {
     formats: withScreenshot
       ? ["markdown", { type: "screenshot", fullPage: false }]
@@ -135,14 +137,16 @@ async function scrapePage(
     onlyMainContent: true,
     waitFor: withScreenshot ? 2000 : 1000,
   });
+  const tFirecrawl = Date.now() - tStart;
   console.log(
-    `[analyze] firecrawl ${label} (${url}) → markdown=${(doc.markdown ?? "").length} chars, screenshotUrl=${doc.screenshot ?? "<none>"}`,
+    `[analyze] firecrawl ${label} (${url}) → markdown=${(doc.markdown ?? "").length} chars, screenshotUrl=${doc.screenshot ?? "<none>"} (${tFirecrawl}ms)`,
   );
   const markdown = (doc.markdown ?? "").slice(0, 6000);
 
   let screenshotBase64: string | undefined;
   let screenshotMediaType: ScrapedPage["screenshotMediaType"] = "image/png";
   if (doc.screenshot) {
+    const tDl = Date.now();
     const res = await fetch(doc.screenshot);
     if (res.ok) {
       const buf = Buffer.from(await res.arrayBuffer());
@@ -152,7 +156,7 @@ async function scrapePage(
       else if (ct.includes("webp")) screenshotMediaType = "image/webp";
       else if (ct.includes("gif")) screenshotMediaType = "image/gif";
       console.log(
-        `[analyze] downloaded ${label} screenshot → ${buf.length} bytes, ${screenshotMediaType}`,
+        `[analyze] downloaded ${label} screenshot → ${buf.length} bytes, ${screenshotMediaType} (${Date.now() - tDl}ms)`,
       );
     } else {
       console.error(
@@ -160,6 +164,7 @@ async function scrapePage(
       );
     }
   }
+  console.log(`[analyze] scrape ${label} total ${Date.now() - tStart}ms`);
   return {
     label,
     url,
@@ -174,6 +179,7 @@ export async function POST(request: Request) {
   if (shouldUseMock(request)) {
     return Response.json(MOCK_ANALYSIS);
   }
+  const tRequestStart = Date.now();
 
   const body = await request.json().catch(() => null);
   const url = typeof body?.url === "string" ? body.url.trim() : "";
@@ -218,10 +224,14 @@ export async function POST(request: Request) {
   ];
 
   // Tolerant parallelism: one failed scrape shouldn't tank the whole request.
+  const tScrapeStart = Date.now();
   const settled = await Promise.allSettled(
     targets.map((t) =>
       scrapePage(firecrawl, t.label, t.url, t.withScreenshot),
     ),
+  );
+  console.log(
+    `[analyze] all scrapes settled in ${Date.now() - tScrapeStart}ms`,
   );
 
   const pages: ScrapedPage[] = [];
@@ -328,6 +338,11 @@ ${competitorNames}. Return ONLY the JSON the schema demands.`;
   }
 
   try {
+    const tClaude = Date.now();
+    const imageCount = content.filter((b) => b.type === "image").length;
+    console.log(
+      `[analyze] claude.messages.create … (${imageCount} images, ${competitorPages.length} competitors)`,
+    );
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 4096,
@@ -337,6 +352,7 @@ ${competitorNames}. Return ONLY the JSON the schema demands.`;
       },
       messages: [{ role: "user", content }],
     });
+    console.log(`[analyze] claude done (${Date.now() - tClaude}ms)`);
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -384,6 +400,7 @@ ${competitorNames}. Return ONLY the JSON the schema demands.`;
       if (p.screenshotUrl) screenshots[p.label] = p.screenshotUrl;
     }
 
+    console.log(`[analyze] request total ${Date.now() - tRequestStart}ms`);
     return Response.json({
       scores: parsed.scores,
       recommendations: topInsights.map((i) => ({
